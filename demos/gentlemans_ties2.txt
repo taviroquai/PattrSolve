@@ -1,0 +1,13 @@
+man called brown;
+man called yellow;
+man called green;
+tie is brown;
+tie is yellow;
+tie is green;
+out the $a man has a $d tie asks, the $b man has a $e tie answers, the $c man has a $f tie listens while
+  {man called $a} and {man called $b} and {man called $c}
+  and {tie is $d} and {tie is $e} and {tie is $f}
+  and not $a == $b and not $a == $c and not $b == $c
+  and not $d == $e and not $d == $f and not $e == $f
+  and not $a == $d and not $b == $e and not $c == $f
+  and $a == yellow and $e == green;

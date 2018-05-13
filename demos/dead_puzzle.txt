@@ -1,0 +1,4 @@
+manuel, 1200, 1000;
+joaquim, 200, 20;
+out o $a está morto if {$a, $b, $c} and $b + $c < 2009;
+out o $a está vivo if {$a, $b, $c} and not $b + $c < 2009;

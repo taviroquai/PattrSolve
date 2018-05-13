@@ -1,0 +1,5 @@
+factorial of 0 is 1;
+factorial of $c is $d if
+  {factorial of $a is $b} and $c = $a + 1 and $d = $c * $b and $a < 5;
+out factorial of 5 is $a if
+  {factorial of 5 is $a};
