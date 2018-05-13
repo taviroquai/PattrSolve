@@ -219,6 +219,8 @@ function Pattr(input) {
     }
 
     // Is a node, evaluate their children
+    //console.log('node', nodeToString(node));
+    //console.log('vars', JSON.stringify(vars));
     if (node.op === 'p') {
       node.val = evaluateNode(
         parseStatement(
@@ -292,7 +294,7 @@ function Pattr(input) {
 
   // TODO: extract add statement???
   function solve(condition, then, localVars, vars) {
-    let newNode= parseStatement(replaceVars(condition, localVars));
+    let newNode = parseStatement(condition);
     let margedVars = assign(vars, localVars);
     const conditionResult = evaluateNode(newNode, margedVars);
     const conditionEval = replaceVars(condition, margedVars);
@@ -300,7 +302,7 @@ function Pattr(input) {
     if (conditionResult) {
       newNode = parseStatement(replaceVars(then, margedVars));
       let newStatement = nodeToString(newNode);
-      console.log('new statement', newStatement);
+      //console.log('new statement', newStatement);
       if (statements.indexOf(newStatement) < 0) {
         evaluateNode(newNode, margedVars);
         statements.push(newStatement);

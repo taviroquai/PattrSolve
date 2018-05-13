@@ -8,7 +8,7 @@ the $a man asks, the $b man answers, the $c man listens forany
   'man called $a' and 'man called $b' and 'man called $c'
   and not $a == $b and not $a == $c and not $b == $c
   and $a == yellow and not $b == green;
-$a man has a $d tie, $b man has a $e tie, $c man has a $f tie forany
+out $a man has a $d tie, $b man has a $e tie, $c man has a $f tie forany
   'the $a man asks, the $b man answers, the $c man listens'
   and 'tie is $d' and 'tie is $e' and 'tie is $f'
   and not $a == $d and not $b == $e and not $c == $f
