@@ -25,17 +25,6 @@ function Pattr(input) {
 
     const node = { op: '', children: [], val: null };
 
-    if (/\(([^()]|).*\)/g.test(stm)) {
-      node.op = 'p';
-      t = /\(([^()]|).*\)/g.exec(stm);
-      let parts = stm.split(t[0]);
-      node.children = [
-        (parts[0] || ''),
-        parseStatement(t[0].substring(1, t[0].length-1)),
-        (parts[1] || '')
-      ];
-      return node;
-    }
     if (/\sforany\s/g.test(clean)) {
       node.op = 'forany';
       t = clean.split(` ${node.op} `);
@@ -52,6 +41,17 @@ function Pattr(input) {
       node.op = 'if';
       t = clean.split(` ${node.op} `);
       node.children = t.map(parseStatement);
+      return node;
+    }
+    if (/\(([^()]|).*\)/g.test(stm)) {
+      node.op = 'p';
+      t = /\(([^()]|).*\)/g.exec(stm);
+      let parts = stm.split(t[0]);
+      node.children = [
+        (parts[0] || ''),
+        parseStatement(t[0].substring(1, t[0].length-1)),
+        (parts[1] || '')
+      ];
       return node;
     }
     if (/^out\s/g.test(clean)) {
@@ -186,7 +186,7 @@ function Pattr(input) {
       return `${node.op} ${nodeToString(node.children[0])}`;
     }
     if (node.op === 'p') {
-      return node.children[0] + nodeToString(node.children[1]) + node.children[2];
+      return node.children[0] + '(' + nodeToString(node.children[1]) + ')' + node.children[2];
     }
     if (node.op === 'not') {
       return `${node.op} ${nodeToString(node.children[0])}`;
@@ -203,7 +203,7 @@ function Pattr(input) {
    * @param {Object|String} node The node to evaluate
    */
   function evaluateNode(node, vars) {
-    //console.log('node', nodeToString(node), vars);
+    //console.log('node', nodeToString(node));
     if (typeof node === 'undefined') return '';
     if (typeof node === 'string') {
       let val = node;
@@ -300,6 +300,7 @@ function Pattr(input) {
     if (conditionResult) {
       newNode = parseStatement(replaceVars(then, margedVars));
       let newStatement = nodeToString(newNode);
+      console.log('new statement', newStatement);
       if (statements.indexOf(newStatement) < 0) {
         evaluateNode(newNode, margedVars);
         statements.push(newStatement);
