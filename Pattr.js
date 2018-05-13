@@ -3,14 +3,13 @@ const keys = require('lodash.keys');
 const comb = require('js-combinatorics');
 
 function Pattr(input) {
+
   // Init variables table
   const contents = input.replace(/\r?\n|\r/g, '');
   let sentences = contents.split(';');
   sentences = sentences.filter(i => i);
-  const statements = sentences.filter(i => i && /\s(if|while)\s/g.test(i) === false);
-  //const rules = sentences.filter(i => i && /\sif\s/g.test(i) === true);
+  const statements = sentences.filter(i => i && /\s(foreach|if|forany)\s/g.test(i) === false);
   const variables = {};
-  let ast = [];
 
   /**
    * Parse statement
@@ -37,8 +36,14 @@ function Pattr(input) {
       ];
       return node;
     }
-    if (/\swhile\s/g.test(clean)) {
-      node.op = 'while';
+    if (/\sforany\s/g.test(clean)) {
+      node.op = 'forany';
+      t = clean.split(` ${node.op} `);
+      node.children = t.map(parseStatement);
+      return node;
+    }
+    if (/\sforeach\s/g.test(clean)) {
+      node.op = 'foreach';
       t = clean.split(` ${node.op} `);
       node.children = t.map(parseStatement);
       return node;
@@ -135,8 +140,8 @@ function Pattr(input) {
         result.splice(0, 1);
         delete result.index;
         delete result.input;
+        stm = stm.replace(result[1], '');
         cb(result);
-        stm.replace(result[1], '');
       }
     }
   }
@@ -147,17 +152,17 @@ function Pattr(input) {
       const regex = new RegExp(k[i].replace('$', '\\$'), "g");
       let result;
       while ((result = regex.exec(stm))) {
-        stm = stm.replace(result[0], vars[k[i]]);
+        if (vars[k[i]]) stm = stm.replace(result[0], vars[k[i]]);
       }
     }
-    stm = stm.replace(/\{|\}/g, '');
+    stm = stm.replace(/\'/g, '');
     return stm;
   }
 
   function extractPattern(stm) {
     let result;
     let patterns = [];
-    while (result = /\{([^{]+)\}/g.exec(stm)) {
+    while (result = /\'([^\']+)\'/g.exec(stm)) {
       patterns.push(result[1]);
       stm = stm.replace(result[0], '');
     }
@@ -166,13 +171,11 @@ function Pattr(input) {
 
   function onMatch(stm, pattern, cb) {
     const v = extractVars(pattern);
+    //console.log('extract vars', v);
     const extractor = getPatternExtractor(pattern);
     const vars = {};
     onExtractPatternValues(stm, extractor, vals => {
-      v.map((i, j) => {
-        vars[i] = vals[j];
-        return vals[i];
-      });
+      v.map((i, j) => { return vars[i] = vals[j]; });
       cb(vars);
     });
   }
@@ -195,140 +198,12 @@ function Pattr(input) {
     return sts.join(` ${node.op} `);
   }
 
-  function evaluateIF(node, vars) {
-    let total = statements.length;
-    let matrix = {};
-    keys(vars).map(k => { matrix[k] = []; });
-
-    function solve(condition, combVars) {
-      //console.log('combVars before', combVars);
-      const conditionEval = replaceVars(condition, combVars);
-      const conditionResult = evaluateNode(parseStatement(conditionEval), combVars);
-      //console.log('vars', combVars);
-      //console.log('condition result', conditionEval, conditionResult);
-      if (conditionResult) {
-        let newNode = parseStatement(replaceVars(then, combVars));
-        let newStatement = nodeToString(newNode);
-        //console.log('then', newStatement);
-        if (statements.indexOf(newStatement) < 0) {
-          evaluateNode(newNode, combVars);
-          statements.push(newStatement);
-        }
-        //statements.push(replaceVars(then, combVars));
-        //evaluateNode(parseStatement(replaceVars(then, combVars)), combVars);
-      }
-    }
-
-    const condition = nodeToString(node.children[1]);
-    const then = nodeToString(node.children[0]);
-    if (/\{(.*)\}/g.test(condition)) {
-      const patterns = extractPattern(condition);
-      //console.log('patterns', patterns);
-
-      let i = 0;
-      while(i < total) {
-        if (statements[i].indexOf('if') > -1) continue;
-        for (j = 0; j < patterns.length; j++) {
-          onMatch(statements[i], patterns[j], vars2 => {
-            keys(vars2).map(k => {matrix[k] = matrix[k] ? matrix[k] : []; matrix[k].push(vars2[k])});
-            solve(condition, vars2);
-          });
-        }
-        i++;
-      }
-
-      //console.log('total', total, statements.length)
-      if (total < statements.length) {
-        return evaluateIF(node, vars);
-      }
-      return node.val;
-    }
-    if (evaluateNode(node.children[1], vars)) {
-      return evaluateNode(node.children[0], vars);
-    }
-    return node.val;
-  }
-
-  function evaluateWhile(node, vars) {
-    let total = statements.length;
-    let matrix = {};
-    keys(vars).map(k => { matrix[k] = []; });
-
-    function solve(condition, combVars) {
-      //console.log('combVars before', combVars);
-      const conditionEval = replaceVars(condition, combVars);
-      const conditionResult = evaluateNode(parseStatement(conditionEval), combVars);
-      //console.log('vars', combVars);
-      console.log('condition result', conditionEval, conditionResult);
-      if (conditionResult) {
-        let newNode = parseStatement(replaceVars(then, combVars));
-        let newStatement = nodeToString(newNode);
-        //console.log('then', newStatement);
-        if (statements.indexOf(newStatement) < 0) {
-          evaluateNode(newNode, combVars);
-          statements.push(newStatement);
-        }
-        //statements.push(replaceVars(then, combVars));
-        //evaluateNode(parseStatement(replaceVars(then, combVars)), combVars);
-      }
-    }
-
-    function solveWithMatrix(condition) {
-      let data = [];
-      //console.log('matrix', matrix);
-      keys(matrix).map(b => {
-        if (matrix[b].length === 0) delete matrix[b];
-      })
-      //console.log('after', matrix);
-      keys(matrix).map(k => {
-        if (matrix[k].length) data.push(matrix[k]);
-      });
-      //console.log('data', data);
-      let cmb = comb.cartesianProduct.apply(null, data);
-      while(slice = cmb.next()) {
-        let combVars = {};
-        keys(matrix).map((k, i) => {
-          combVars[k] = slice[i];
-        });
-        solve(condition, combVars);
-      }
-    }
-
-    const condition = nodeToString(node.children[1]);
-    const then = nodeToString(node.children[0]);
-    if (/\{(.*)\}/g.test(condition)) {
-      const patterns = extractPattern(condition);
-      //console.log('patterns', patterns);
-
-      let i = 0;
-      while(i < total) {
-        if (statements[i].indexOf('while') > -1) continue;
-        for (j = 0; j < patterns.length; j++) {
-          onMatch(statements[i], patterns[j], vars2 => {
-            keys(vars2).map(k => {matrix[k] = matrix[k] ? matrix[k] : []; matrix[k].push(vars2[k])});
-          });
-        }
-        i++;
-      }
-
-      solveWithMatrix(condition);
-
-      //console.log('total', total, statements.length)
-      if (total < statements.length) {
-        return evaluateWhile(node, vars);
-      }
-      return node.val;
-    }
-    return node.val;
-  }
-
   /**
    * Evaluate node
    * @param {Object|String} node The node to evaluate
    */
   function evaluateNode(node, vars) {
     //console.log('node', nodeToString(node), vars);
-    // Leaf of nodes is always a string
     if (typeof node === 'undefined') return '';
     if (typeof node === 'string') {
       let val = node;
@@ -340,12 +215,10 @@ function Pattr(input) {
       else if (!isNaN(node)) val = +node;
       else val = node;
       val = isNaN(val) ? val : +val;
-      //console.log('val', typeof val, val);
       return val;
     }
 
     // Is a node, evaluate their children
-
     if (node.op === 'p') {
       node.val = evaluateNode(
         parseStatement(
@@ -355,11 +228,14 @@ function Pattr(input) {
         ), vars
       );
     }
-    if (node.op === 'while') {
-      node.val = evaluateWhile(node, vars);
+    if (node.op === 'forany') {
+      node.val = evaluateFromAny(node, vars);
+    }
+    if (node.op === 'foreach') {
+      node.val = evaluateForEach(node, vars);
     }
     if (node.op === 'if') {
-      node.val = evaluateIF(node, vars);
+      node.val = evaluateForEach(node, vars);
     }
     if (node.op === 'out') {
       node.val = evaluateNode(node.children[0], vars);
@@ -397,10 +273,7 @@ function Pattr(input) {
     }
     if (node.op === '=') {
       node.val = evaluateNode(node.children[1], vars);
-      //console.log('= vars', vars, node.children[0]);
-      //if (keys(vars).indexOf(node.children[0]) > -1) {
-        vars[node.children[0]] = node.val;
-      //}
+      vars[node.children[0]] = node.val;
     }
     if (node.op === '+') {
       node.val = evaluateNode(node.children[0], vars) + evaluateNode(node.children[1], vars);
@@ -417,13 +290,97 @@ function Pattr(input) {
     return node.val;
   }
 
+  // TODO: extract add statement???
+  function solve(condition, then, localVars, vars) {
+    let newNode= parseStatement(replaceVars(condition, localVars));
+    let margedVars = assign(vars, localVars);
+    const conditionResult = evaluateNode(newNode, margedVars);
+    const conditionEval = replaceVars(condition, margedVars);
+    //console.log('condition result', conditionEval, conditionResult);
+    if (conditionResult) {
+      newNode = parseStatement(replaceVars(then, margedVars));
+      let newStatement = nodeToString(newNode);
+      if (statements.indexOf(newStatement) < 0) {
+        evaluateNode(newNode, margedVars);
+        statements.push(newStatement);
+      }
+    }
+  }
+
+  function evaluateIF(node, vars) {
+
+    // Skip pattern supplied, run foreach
+    if (/\'([^\']+)\'/g.test(condition)) {
+      return evaluateForEach(mode, vars);
+    }
+    if (evaluateNode(node.children[1], vars)) {
+      return evaluateNode(node.children[0], vars);
+    }
+  }
+
+  function evaluateForEach(node, vars) {
+
+    // Skip if no pattern supplied
+    if (/\'([^\']+)\'/g.test(nodeToString(node.children[1])) === null) return;
+
+    const total = statements.length;
+    const condition = nodeToString(node.children[1]);
+    const then = nodeToString(node.children[0]);
+    const patterns = extractPattern(condition);
+    statements.map(stm => {
+      patterns.map(pattr => {
+        onMatch(stm, pattr, localVars => {
+          solve(condition, then, localVars, vars);
+        });
+      });
+    });
+
+    // Repeat if more statements were added
+    if (total < statements.length) return evaluateForEach(node, vars);
+  }
+
+  function evaluateFromAny(node, vars) {
+
+    // Skip if no pattern supplied
+    if (/\'([^\']+)\'/g.test(nodeToString(node.children[1])) === null) return;
+
+    let total = statements.length;
+    let matrix = {};
+    keys(vars).map(k => { matrix[k] = []; });
+    const condition = nodeToString(node.children[1]);
+    const then = nodeToString(node.children[0]);
+    const patterns = extractPattern(condition);
+    statements.map(stm => {
+      patterns.map(pattr => {
+        onMatch(stm, pattr, vars2 => {
+          keys(vars2).map(k => {
+            matrix[k] = matrix[k] ? matrix[k] : []; matrix[k].push(vars2[k])
+          });
+        });
+      });
+    });
+
+    // Create combinations
+    let data = [];
+    keys(matrix).map(b => { if (matrix[b].length === 0) delete matrix[b]; });
+    keys(matrix).map(k => { if (matrix[k].length) data.push(matrix[k]); });
+    let cmb = comb.cartesianProduct.apply(null, data);
+    while(slice = cmb.next()) {
+      let localVars = {};
+      keys(matrix).map((k, i) => { localVars[k] = slice[i]; });
+
+      // Run solve condition for each var combination
+      solve(condition, then, localVars, vars);
+    }
+
+    // Repeat if more statements were added
+    if (total < statements.length) return evaluateFromAny(node, vars);
+  }
+
   return {
     run() {
-      // ast = rules.map(parseStatement);
-      // ast.map(n => evaluateNode(n, variables));
       sentences.map(r => evaluateNode(parseStatement(r), variables));
-      // ast.map(evaluateNode, variables);
-    },
+    }
   };
 }
 

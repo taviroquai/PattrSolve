@@ -4,10 +4,10 @@ man called green;
 tie is brown;
 tie is yellow;
 tie is green;
-out $a man has a $c tie, $b man has a $d tie while
-  {man called $a} and {man called $b} and {tie is $c} and {tie is $d}
+out $a man has a $c tie, $b man has a $d tie forany
+  'man called $a' and 'man called $b' and 'tie is $c' and 'tie is $d'
   and not $a == $b and not $a == $c and not $b == $d and not $c == $d
   and $a == yellow and $d == green;
-out $e man has a $f tie while
-  {$a man has a $c tie, $b man has a $d tie} and {man called $e} and {tie is $f}
+out $e man has a $f tie forany
+  '$a man has a $c tie, $b man has a $d tie' and 'man called $e' and 'tie is $f'
   and not $e == $a and not $e == $b and not $f == $c and not $f == $d and not $e == $f;
