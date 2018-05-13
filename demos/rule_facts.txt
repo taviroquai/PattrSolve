@@ -1,0 +1,4 @@
+foo 0;
+foo 1;
+binary $a $b $c $d forany 'foo $a' and 'foo $b' and 'foo $c' and 'foo $d';
+out decimal ($d * 8 + $c * 4 + $b * 2 + $a * 1) foreach 'binary $d $c $b $a';

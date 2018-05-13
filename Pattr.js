@@ -221,6 +221,7 @@ function Pattr(input) {
     // Is a node, evaluate their children
     //console.log('node', nodeToString(node));
     //console.log('vars', JSON.stringify(vars));
+    //console.log('debug', node);
     if (node.op === 'p') {
       node.val = evaluateNode(
         parseStatement(
@@ -278,16 +279,28 @@ function Pattr(input) {
       vars[node.children[0]] = node.val;
     }
     if (node.op === '+') {
-      node.val = evaluateNode(node.children[0], vars) + evaluateNode(node.children[1], vars);
+      node.val = evaluateNode(node.children[0], vars);
+      for (let i = 1; i < node.children.length; i++) {
+        node.val += evaluateNode(node.children[i], vars);
+      }
     }
     if (node.op === '-') {
-      node.val = evaluateNode(node.children[0], vars) - evaluateNode(node.children[1], vars);
+      node.val = evaluateNode(node.children[0], vars);
+      for (let i = 1; i < node.children.length; i++) {
+        node.val -= evaluateNode(node.children[i], vars);
+      }
     }
     if (node.op === '*') {
-      node.val = evaluateNode(node.children[0], vars) * evaluateNode(node.children[1], vars);
+      node.val = evaluateNode(node.children[0], vars);
+      for (let i = 1; i < node.children.length; i++) {
+        node.val *= evaluateNode(node.children[i], vars);
+      }
     }
     if (node.op === '/') {
-      node.val = evaluateNode(node.children[0], vars) / evaluateNode(node.children[1], vars);
+      node.val = evaluateNode(node.children[0], vars);
+      for (let i = 1; i < node.children.length; i++) {
+        node.val /= evaluateNode(node.children[i], vars);
+      }
     }
     return node.val;
   }
