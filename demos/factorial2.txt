@@ -1,0 +1,2 @@
+foo 0 is 1;
+out foo ($a + 1) is (($a + 1) * $b) while 'foo $a is $b' and $a < 5;

@@ -8,7 +8,7 @@ function Pattr(input) {
   const contents = input.replace(/\r?\n|\r/g, '');
   let sentences = contents.split(';');
   sentences = sentences.filter(i => i);
-  const statements = sentences.filter(i => i && /\s(foreach|if|forany)\s/g.test(i) === false);
+  const statements = sentences.filter(i => i && /\s(foreach|if|forany|while)\s/g.test(i) === false);
   const variables = {};
 
   /**
@@ -37,16 +37,24 @@ function Pattr(input) {
       node.children = t.map(parseStatement);
       return node;
     }
+    if (/\swhile\s/g.test(clean)) {
+      node.op = 'while';
+      t = clean.split(` ${node.op} `);
+      node.children = t.map(parseStatement);
+      return node;
+    }
     if (/\sif\s/g.test(clean)) {
       node.op = 'if';
       t = clean.split(` ${node.op} `);
       node.children = t.map(parseStatement);
       return node;
     }
-    if (/\(([^()]|).*\)/g.test(stm)) {
+    if (/\(([^()]|)*\)/g.test(stm)) {
       node.op = 'p';
-      t = /\(([^()]|).*\)/g.exec(stm);
-      let parts = stm.split(t[0]);
+      t = /\(([^()]|)*\)/g.exec(stm);
+      let parts = [];
+      parts.push(stm.substr(0, stm.indexOf(t[0])));
+      parts.push(stm.substr(stm.indexOf(t[0]) + t[0].length));
       node.children = [
         (parts[0] || ''),
         parseStatement(t[0].substring(1, t[0].length-1)),
@@ -198,11 +206,19 @@ function Pattr(input) {
     return sts.join(` ${node.op} `);
   }
 
+  function debug(level, stm, vars, result) {
+    let spaces = '';
+    for (let h = 0; h < level; h++) spaces += '  ';
+    //console.log('debug:', level, spaces + stm, vars, result);
+    var waitTill = new Date(new Date().getTime() + 2 * 1000);
+    //while(waitTill > new Date()){}
+  }
+
   /**
    * Evaluate node
    * @param {Object|String} node The node to evaluate
    */
-  function evaluateNode(node, vars) {
+  function evaluateNode(node, vars, statements, level) {
     //console.log('node', nodeToString(node));
     if (typeof node === 'undefined') return '';
     if (typeof node === 'string') {
@@ -219,122 +235,135 @@ function Pattr(input) {
     }
 
     // Is a node, evaluate their children
-    //console.log('node', nodeToString(node));
     //console.log('vars', JSON.stringify(vars));
-    //console.log('debug', node);
+    //console.log('debug', node, vars);
+    if (node.op === 'forany') {
+      node.val = evaluateFromAny(node, vars, statements, level);
+    }
+    if (node.op === 'foreach') {
+      node.val = evaluateForEach(node, vars, statements, level);
+    }
+    if (node.op === 'while') {
+      node.val = evaluateWhile(node, vars, statements, level);
+    }
+    if (node.op === 'if') {
+      node.val = evaluateIF(node, vars, statements, level);
+    }
     if (node.op === 'p') {
       node.val = evaluateNode(
         parseStatement(
           node.children[0]
-          + evaluateNode(node.children[1])
+          + evaluateNode(node.children[1], vars, statements, level + 1)
           + node.children[2]
-        ), vars
+        ),
+        vars, statements, level + 1
       );
     }
-    if (node.op === 'forany') {
-      node.val = evaluateFromAny(node, vars);
-    }
-    if (node.op === 'foreach') {
-      node.val = evaluateForEach(node, vars);
-    }
-    if (node.op === 'if') {
-      node.val = evaluateForEach(node, vars);
-    }
     if (node.op === 'out') {
-      node.val = evaluateNode(node.children[0], vars);
+      node.val = evaluateNode(node.children[0], vars, statements, level + 1);
       global.console.log(node.val);
     }
     if (node.op === 'not') {
-      node.val = !evaluateNode(node.children[0], vars);
+      node.val = !evaluateNode(node.children[0], vars, statements, level + 1);
     }
     if (node.op === 'and') {
       node.val = true;
       node.children.map(n => {
-        node.val = node.val && evaluateNode(n, vars)
+        node.val = node.val && evaluateNode(n, vars, statements, level + 1);
       });
     }
     if (node.op === 'or') {
       node.val = true;
       node.children.map(n => {
-        node.val = node.val || evaluateNode(n, vars)
+        node.val = node.val || evaluateNode(n, vars, statements, level + 1);
       });
     }
     if (node.op === '==') {
-      node.val = evaluateNode(node.children[0], vars) == evaluateNode(node.children[1], vars);
+      node.val = evaluateNode(node.children[0], vars, statements, level + 1)
+        ==
+        evaluateNode(node.children[1], vars, statements, level + 1);
     }
     if (node.op === '>') {
-      node.val = evaluateNode(node.children[0], vars) > evaluateNode(node.children[1], vars);
+      node.val = evaluateNode(node.children[0], vars, statements, level + 1)
+        >
+        evaluateNode(node.children[1], vars, level + 1);
     }
     if (node.op === '<') {
-      node.val = evaluateNode(node.children[0], vars) < evaluateNode(node.children[1], vars);
+      node.val = evaluateNode(node.children[0], vars, statements, level + 1)
+        <
+        evaluateNode(node.children[1], vars, statements, level + 1);
     }
     if (node.op === '>=') {
-      node.val = evaluateNode(node.children[0], vars) >= evaluateNode(node.children[1], vars);
+      node.val = evaluateNode(node.children[0], vars, statements, level + 1)
+        >=
+        evaluateNode(node.children[1], vars, statements, level + 1);
     }
     if (node.op === '<=') {
-      node.val = evaluateNode(node.children[0], vars) <= evaluateNode(node.children[1], vars);
+      node.val = evaluateNode(node.children[0], vars, statements, level + 1)
+        <=
+        evaluateNode(node.children[1], vars, statements, level + 1);
     }
     if (node.op === '=') {
-      node.val = evaluateNode(node.children[1], vars);
+      node.val = evaluateNode(node.children[1], vars, statements, level + 1);
       vars[node.children[0]] = node.val;
     }
     if (node.op === '+') {
-      node.val = evaluateNode(node.children[0], vars);
+      node.val = evaluateNode(node.children[0], vars, statements, level + 1);
       for (let i = 1; i < node.children.length; i++) {
-        node.val += evaluateNode(node.children[i], vars);
+        node.val += evaluateNode(node.children[i], vars, statements, level + 1);
       }
     }
     if (node.op === '-') {
-      node.val = evaluateNode(node.children[0], vars);
+      node.val = evaluateNode(node.children[0], vars, statements, level + 1);
       for (let i = 1; i < node.children.length; i++) {
-        node.val -= evaluateNode(node.children[i], vars);
+        node.val -= evaluateNode(node.children[i], vars, statements, level + 1);
       }
     }
     if (node.op === '*') {
-      node.val = evaluateNode(node.children[0], vars);
+      node.val = evaluateNode(node.children[0], vars, statements, level + 1);
       for (let i = 1; i < node.children.length; i++) {
-        node.val *= evaluateNode(node.children[i], vars);
+        node.val *= evaluateNode(node.children[i], vars, statements, level + 1);
       }
     }
     if (node.op === '/') {
-      node.val = evaluateNode(node.children[0], vars);
+      node.val = evaluateNode(node.children[0], vars, statements, level + 1);
       for (let i = 1; i < node.children.length; i++) {
-        node.val /= evaluateNode(node.children[i], vars);
+        node.val /= evaluateNode(node.children[i], vars, statements, level + 1);
       }
     }
+
+    debug(level, nodeToString(node), vars, node.val);
     return node.val;
   }
 
   // TODO: extract add statement???
-  function solve(condition, then, localVars, vars) {
+  function solve(condition, then, localVars, vars, statements, level) {
     let newNode = parseStatement(condition);
-    let margedVars = assign(vars, localVars);
-    const conditionResult = evaluateNode(newNode, margedVars);
-    const conditionEval = replaceVars(condition, margedVars);
+    let mergedVars = assign(vars, localVars);
+    const conditionResult = evaluateNode(newNode, mergedVars, statements, level + 1);
+    const conditionEval = replaceVars(condition, mergedVars);
     //console.log('condition result', conditionEval, conditionResult);
     if (conditionResult) {
-      newNode = parseStatement(replaceVars(then, margedVars));
-      let newStatement = nodeToString(newNode);
-      //console.log('new statement', newStatement);
-      if (statements.indexOf(newStatement) < 0) {
-        evaluateNode(newNode, margedVars);
-        statements.push(newStatement);
-      }
+      newNode = parseStatement(replaceVars(then, mergedVars));
+      return { node: newNode, vars: mergedVars, result: conditionResult };
     }
+    return false;
   }
 
-  function evaluateIF(node, vars) {
+  function evaluateIF(node, vars, statements, level) {
 
     // Skip pattern supplied, run foreach
-    if (/\'([^\']+)\'/g.test(condition)) {
-      return evaluateForEach(mode, vars);
+    if (/\'([^\']+)\'/g.test(nodeToString(node))) {
+      node.val = evaluateForEach(node, vars, statements, level);
+      return node.val;
     }
-    if (evaluateNode(node.children[1], vars)) {
-      return evaluateNode(node.children[0], vars);
+    node.val = evaluateNode(node.children[1], vars, statements, level + 1);
+    if (node.val) {
+      return evaluateNode(node.children[0], vars, statements, level + 1);
     }
   }
 
-  function evaluateForEach(node, vars) {
+  function evaluateForEach(node, vars, statements, level) {
 
     // Skip if no pattern supplied
     if (/\'([^\']+)\'/g.test(nodeToString(node.children[1])) === null) return;
@@ -346,16 +375,46 @@ function Pattr(input) {
     statements.map(stm => {
       patterns.map(pattr => {
         onMatch(stm, pattr, localVars => {
-          solve(condition, then, localVars, vars);
+          let result = solve(condition, then, localVars, vars, statements, level);
+          if (result) {
+            let newStatement = nodeToString(result.node);
+            //console.log('to add:', newStatement);
+            if (statements.indexOf(newStatement) < 0) {
+              evaluateNode(result.node, result.vars, statements, level);
+              statements.push(newStatement);
+            }
+          }
         });
       });
     });
 
     // Repeat if more statements were added
-    if (total < statements.length) return evaluateForEach(node, vars);
+    if (total < statements.length) return evaluateForEach(node, vars, statements, level);
   }
 
-  function evaluateFromAny(node, vars) {
+  function evaluateWhile(node, vars, statements, level) {
+    if (/\'([^\']+)\'/g.test(nodeToString(node.children[1])) === null) return;
+    const total = statements.length;
+    const condition = nodeToString(node.children[1]);
+    const then = nodeToString(node.children[0]);
+    const patterns = extractPattern(condition);
+    let lastVars = Object.assign({}, vars);
+    statements.map(stm => {
+      patterns.map(pattr => {
+        onMatch(stm, pattr, localVars => {
+          let result = solve(condition, then, localVars, vars, statements, level);
+          if (result) {
+            let newStatement = nodeToString(evaluateNode(result.node, result.vars, statements, level + 1));
+            lastVars = evaluateWhile(node, result.vars, [newStatement], level);
+            node.val = evaluateNode(parseStatement(newStatement), lastVars, statements, level + 1);
+          }
+        });
+      });
+    });
+    return lastVars;
+  }
+
+  function evaluateFromAny(node, vars, statements, level) {
 
     // Skip if no pattern supplied
     if (/\'([^\']+)\'/g.test(nodeToString(node.children[1])) === null) return;
@@ -386,16 +445,29 @@ function Pattr(input) {
       keys(matrix).map((k, i) => { localVars[k] = slice[i]; });
 
       // Run solve condition for each var combination
-      solve(condition, then, localVars, vars);
+      let result = solve(condition, then, localVars, vars, statements, level);
+      if (result) {
+        let newStatement = nodeToString(result.node);
+        //console.log('new statement', newStatement);
+        if (statements.indexOf(newStatement) < 0) {
+          evaluateNode(result.node, result.vars, statements, level);
+          statements.push(newStatement);
+        }
+      }
     }
 
-    // Repeat if more statements were added
-    if (total < statements.length) return evaluateFromAny(node, vars);
+    // Repeat foreach result generated
+    /*
+    stack.map(r => {
+      evaluateFromAny(r.node, r.vars);
+    });
+    */
+    if (total < statements.length) return evaluateFromAny(node, vars, statements, level);
   }
 
   return {
     run() {
-      sentences.map(r => evaluateNode(parseStatement(r), variables));
+      sentences.map(r => evaluateNode(parseStatement(r), variables, statements, 0));
     }
   };
 }
