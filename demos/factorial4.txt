@@ -1,0 +1,5 @@
+factorial of 0 is 1;
+factorial of ($a + 1) is (($a + 1) * $b) foreach
+  'factorial of $a is $b' and $a < 5;
+out factorial of 5 is $a if
+  'factorial of 5 is $a';
