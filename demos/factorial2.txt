@@ -1,2 +1,5 @@
-foo 0 is 1;
-out foo ($a + 1) is (($a + 1) * $b) while 'foo $a is $b' and $a < 5;
+factorial of 0 is 1;
+factorial of ($a + 1) is (($a + 1) * $b) while
+  'factorial of $a is $b' and $a < 5;
+out factorial of 5 is $a if
+  'factorial of 5 is $a';

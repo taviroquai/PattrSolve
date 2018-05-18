@@ -206,14 +206,6 @@ function Pattr(input) {
     return sts.join(` ${node.op} `);
   }
 
-  function debug(level, stm, vars, result) {
-    let spaces = '';
-    for (let h = 0; h < level; h++) spaces += '  ';
-    //console.log('debug:', level, spaces + stm, vars, result);
-    var waitTill = new Date(new Date().getTime() + 2 * 1000);
-    //while(waitTill > new Date()){}
-  }
-
   /**
    * Evaluate node
    * @param {Object|String} node The node to evaluate
@@ -336,7 +328,6 @@ function Pattr(input) {
     return node.val;
   }
 
-  // TODO: extract add statement???
   function solve(condition, then, localVars, vars, statements, level) {
     let newNode = parseStatement(condition);
     let mergedVars = assign(vars, localVars);
@@ -350,9 +341,20 @@ function Pattr(input) {
     return false;
   }
 
-  function evaluateIF(node, vars, statements, level) {
+  function onMatchPattern(node, statements, cb) {
+    const condition = nodeToString(node.children[1]);
+    const then = nodeToString(node.children[0]);
+    const patterns = extractPattern(condition);
+    statements.map(stm => {
+      patterns.map(pattr => {
+        onMatch(stm, pattr, localVars => {
+          cb(localVars, condition, then);
+        });
+      });
+    });
+  }
 
-    // Skip pattern supplied, run foreach
+  function evaluateIF(node, vars, statements, level) {
     if (/\'([^\']+)\'/g.test(nodeToString(node))) {
       node.val = evaluateForEach(node, vars, statements, level);
       return node.val;
@@ -363,75 +365,52 @@ function Pattr(input) {
     }
   }
 
-  function evaluateForEach(node, vars, statements, level) {
-
-    // Skip if no pattern supplied
+  function evaluateForEach(node, vars, tmpStatements, level) {
     if (/\'([^\']+)\'/g.test(nodeToString(node.children[1])) === null) return;
-
     const total = statements.length;
-    const condition = nodeToString(node.children[1]);
-    const then = nodeToString(node.children[0]);
-    const patterns = extractPattern(condition);
-    statements.map(stm => {
-      patterns.map(pattr => {
-        onMatch(stm, pattr, localVars => {
-          let result = solve(condition, then, localVars, vars, statements, level);
-          if (result) {
-            let newStatement = nodeToString(result.node);
-            //console.log('to add:', newStatement);
-            if (statements.indexOf(newStatement) < 0) {
-              evaluateNode(result.node, result.vars, statements, level);
-              statements.push(newStatement);
-            }
-          }
-        });
-      });
+    const newStatements = [];
+    onMatchPattern(node, tmpStatements, (localVars, condition, then) => {
+      let result = solve(condition, then, localVars, vars, tmpStatements, level);
+      if (result) {
+        newStatement = nodeToString(evaluateNode(parseStatement(then), result.vars, tmpStatements, level + 1));
+        if (statements.indexOf(newStatement) < 0) {
+          //evaluateNode(result.node, result.vars, statements, level);
+          statements.push(newStatement);
+          newStatements.push(newStatement);
+        }
+      }
     });
 
     // Repeat if more statements were added
-    if (total < statements.length) return evaluateForEach(node, vars, statements, level);
+    if (newStatements.length) return evaluateForEach(node, vars, newStatements, level + 1);
   }
 
-  function evaluateWhile(node, vars, statements, level) {
+  function evaluateWhile(node, vars, tmpStatements, level) {
     if (/\'([^\']+)\'/g.test(nodeToString(node.children[1])) === null) return;
-    const total = statements.length;
-    const condition = nodeToString(node.children[1]);
-    const then = nodeToString(node.children[0]);
-    const patterns = extractPattern(condition);
     let lastVars = Object.assign({}, vars);
-    statements.map(stm => {
-      patterns.map(pattr => {
-        onMatch(stm, pattr, localVars => {
-          let result = solve(condition, then, localVars, vars, statements, level);
-          if (result) {
-            let newStatement = nodeToString(evaluateNode(result.node, result.vars, statements, level + 1));
-            lastVars = evaluateWhile(node, result.vars, [newStatement], level);
-            node.val = evaluateNode(parseStatement(newStatement), lastVars, statements, level + 1);
-          }
-        });
-      });
+    let newStatement;
+    onMatchPattern(node, tmpStatements, (localVars, condition, then) => {
+      let result = solve(condition, then, localVars, vars, tmpStatements, level);
+      if (result) {
+        newStatement = evaluateNode(parseStatement(then), result.vars, tmpStatements, level + 1);
+        lastVars = evaluateWhile(node, result.vars, [newStatement], level + 1);
+        node.val = evaluateNode(parseStatement(newStatement), lastVars, tmpStatements, level + 1);
+        if (statements.indexOf(''+node.val) < 0) statements.push(newStatement);
+      }
     });
     return lastVars;
   }
 
   function evaluateFromAny(node, vars, statements, level) {
-
-    // Skip if no pattern supplied
     if (/\'([^\']+)\'/g.test(nodeToString(node.children[1])) === null) return;
-
     let total = statements.length;
     let matrix = {};
     keys(vars).map(k => { matrix[k] = []; });
     const condition = nodeToString(node.children[1]);
     const then = nodeToString(node.children[0]);
-    const patterns = extractPattern(condition);
-    statements.map(stm => {
-      patterns.map(pattr => {
-        onMatch(stm, pattr, vars2 => {
-          keys(vars2).map(k => {
-            matrix[k] = matrix[k] ? matrix[k] : []; matrix[k].push(vars2[k])
-          });
-        });
+    onMatchPattern(node, statements, (localVars) => {
+      keys(localVars).map(k => {
+        matrix[k] = matrix[k] ? matrix[k] : []; matrix[k].push(localVars[k])
       });
     });
 
@@ -457,12 +436,15 @@ function Pattr(input) {
     }
 
     // Repeat foreach result generated
-    /*
-    stack.map(r => {
-      evaluateFromAny(r.node, r.vars);
-    });
-    */
     if (total < statements.length) return evaluateFromAny(node, vars, statements, level);
+  }
+
+  function debug(level, stm, vars, result) {
+    let spaces = '';
+    for (let h = 0; h < level; h++) spaces += '  ';
+    //console.log('debug:', level, spaces + stm, vars, result);
+    var waitTill = new Date(new Date().getTime() + 0.5 * 1000);
+    //while(waitTill > new Date()){}
   }
 
   return {
