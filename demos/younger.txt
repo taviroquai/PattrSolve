@@ -1,0 +1,4 @@
+john is 19;
+maria is 20;
+luke is 18;
+out $a is younger than $c forall '$a is $b' and '$c is $d' and not $a == $c and $b < $d;

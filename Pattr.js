@@ -8,7 +8,7 @@ function Pattr(input) {
   const contents = input.replace(/\r?\n|\r/g, '');
   let sentences = contents.split(';');
   sentences = sentences.filter(i => i);
-  const statements = sentences.filter(i => i && /\s(foreach|if|forany|while)\s/g.test(i) === false);
+  const statements = sentences.filter(i => i && /\s(foreach|if|forany|while|forall)\s/g.test(i) === false);
   const variables = {};
 
   /**
@@ -27,6 +27,12 @@ function Pattr(input) {
 
     if (/\sforany\s/g.test(clean)) {
       node.op = 'forany';
+      t = clean.split(` ${node.op} `);
+      node.children = t.map(parseStatement);
+      return node;
+    }
+    if (/\sforall\s/g.test(clean)) {
+      node.op = 'forall';
       t = clean.split(` ${node.op} `);
       node.children = t.map(parseStatement);
       return node;
@@ -229,6 +235,9 @@ function Pattr(input) {
     // Is a node, evaluate their children
     //console.log('vars', JSON.stringify(vars));
     //console.log('debug', node, vars);
+    if (node.op === 'forall') {
+      node.val = evaluateforall(node, vars, statements, level);
+    }
     if (node.op === 'forany') {
       node.val = evaluateFromAny(node, vars, statements, level);
     }
@@ -437,6 +446,61 @@ function Pattr(input) {
 
     // Repeat foreach result generated
     if (total < statements.length) return evaluateFromAny(node, vars, statements, level);
+  }
+
+  function evaluateforall(node, vars, statements, level) {
+    if (/\'([^\']+)\'/g.test(nodeToString(node.children[1])) === null) return;
+    let total = statements.length;
+    let matrix = [];
+    const condition = nodeToString(node.children[1]);
+    const then = nodeToString(node.children[0]);
+    const patterns = extractPattern(condition);
+    let foundVars = [];
+    patterns.map(pattr => {
+      statements.map(stm => {
+        let slice = {};
+        onMatch(stm, pattr, localVars => {
+          keys(localVars).map(k => {
+            if (foundVars.indexOf(k) < 0) foundVars.push(k);
+            slice[k] = localVars[k];
+          });
+        });
+        matrix.push(slice);
+      });
+    });
+
+    let slices = [];
+    for (let i = 0; i < matrix.length; i++) {
+      for (let j = 0; j < matrix.length; j++) {
+        let slice = {};
+        keys(matrix[i]).map(k => {
+          slice[k] = matrix[i][k];
+        });
+        keys(matrix[j]).map(k => {
+          slice[k] = matrix[j][k];
+        });
+        if (keys(slice).length === foundVars.length) {
+          slices.push(slice);
+        }
+      }
+    }
+
+    // forall all vars
+    slices.map(slice => {
+      // Run solve condition for each var combination
+      let result = solve(condition, then, slice, vars, statements, level);
+      if (result) {
+        let newStatement = nodeToString(result.node);
+        //console.log('new statement', newStatement);
+        if (statements.indexOf(newStatement) < 0) {
+          evaluateNode(result.node, result.vars, statements, level);
+          statements.push(newStatement);
+        }
+      }
+    });
+
+    // Repeat foreach result generated
+    if (total < statements.length) return evaluateforall(node, vars, statements, level);
   }
 
   function debug(level, stm, vars, result) {
