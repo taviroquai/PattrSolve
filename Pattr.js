@@ -451,12 +451,13 @@ function Pattr(input) {
   function evaluateforall(node, vars, statements, level) {
     if (/\'([^\']+)\'/g.test(nodeToString(node.children[1])) === null) return;
     let total = statements.length;
-    let matrix = [];
+    let matrix2 = [];
     const condition = nodeToString(node.children[1]);
     const then = nodeToString(node.children[0]);
     const patterns = extractPattern(condition);
-    let foundVars = [];
+    let foundVars = [], i = 0;
     patterns.map(pattr => {
+      matrix2[i] = [];
       statements.map(stm => {
         let slice = {};
         onMatch(stm, pattr, localVars => {
@@ -465,24 +466,33 @@ function Pattr(input) {
             slice[k] = localVars[k];
           });
         });
-        matrix.push(slice);
+        if (keys(slice).length) matrix2[i].push(slice);
       });
+      i++;
     });
 
-    let slices = [];
-    for (let i = 0; i < matrix.length; i++) {
-      for (let j = 0; j < matrix.length; j++) {
-        let slice = {};
-        keys(matrix[i]).map(k => {
-          slice[k] = matrix[i][k];
-        });
-        keys(matrix[j]).map(k => {
-          slice[k] = matrix[j][k];
-        });
-        if (keys(slice).length === foundVars.length) {
-          slices.push(slice);
+    function mutate(array) {
+      if (array.length === 1) return array[0].map(el => [el]);
+      const mutations = mutate(array.slice(1));
+      const result = [];
+      for(const el of array[0]) {
+        for(const rest of mutations) {
+          result.push([el, ...rest]);
         }
       }
+      return result;
+    }
+    let data = mutate(matrix2);
+
+    let slices = [];
+    for (let i = 0; i < data.length; i++) {
+      slice = {};
+      for (let j = 0; j < data[i].length; j++) {
+        keys(data[i][j]).map(k => {
+          slice[k] = data[i][j][k];
+        });
+      }
+      slices.push(slice);
     }
 
     // forall all vars
